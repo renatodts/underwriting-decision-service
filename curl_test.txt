@@ -1,0 +1,27 @@
+# Start the service first in another terminal: npm start
+# Run all five requests with: bash curl_test.txt
+
+# 1. APPROVE: HTTP 200, approvedAmount 280000, DTI 0.25, LTV 0.7.
+curl -i -X POST 'http://127.0.0.1:3000/api/underwriting/decision' \
+  -H 'Content-Type: application/json' \
+  -d '{"annualIncome":120000,"monthlyDebt":2500,"propertyValue":400000,"requestedLoan":280000,"creditScore":720}'
+
+# 2. REFER: HTTP 200, credit score below 680, approvedAmount null.
+curl -i -X POST 'http://127.0.0.1:3000/api/underwriting/decision' \
+  -H 'Content-Type: application/json' \
+  -d '{"annualIncome":120000,"monthlyDebt":2500,"propertyValue":400000,"requestedLoan":280000,"creditScore":650}'
+
+# 3. DECLINE: HTTP 200, DTI above 50%, approvedAmount null.
+curl -i -X POST 'http://127.0.0.1:3000/api/underwriting/decision' \
+  -H 'Content-Type: application/json' \
+  -d '{"annualIncome":120000,"monthlyDebt":5001,"propertyValue":400000,"requestedLoan":280000,"creditScore":720}'
+
+# 4. DECLINE with three reasons: HTTP 200, credit decline plus DTI and LTV referrals.
+curl -i -X POST 'http://127.0.0.1:3000/api/underwriting/decision' \
+  -H 'Content-Type: application/json' \
+  -d '{"annualIncome":120000,"monthlyDebt":4500,"propertyValue":400000,"requestedLoan":340000,"creditScore":599}'
+
+# 5. VALIDATION_ERROR: HTTP 400, monthlyDebt must be greater than zero.
+curl -i -X POST 'http://127.0.0.1:3000/api/underwriting/decision' \
+  -H 'Content-Type: application/json' \
+  -d '{"annualIncome":120000,"monthlyDebt":0,"propertyValue":400000,"requestedLoan":280000,"creditScore":720}'
