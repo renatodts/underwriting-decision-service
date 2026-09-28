@@ -37,6 +37,17 @@ function error(result,status,code) {
  assert.equal(result.status,status); assert.match(result.headers['content-type'],/^application\/json/);
  assert.equal(result.body.error.code,code);assert.equal(typeof result.body.error.message,'string');assert.ok(Array.isArray(result.body.error.details));
  assert.deepEqual(Object.keys(result.body),['error']);
+ const fixedMessages = {
+  UNSUPPORTED_CONTENT_TYPE: 'Content-Type must be application/json.',
+  REQUEST_TOO_LARGE: 'Request body exceeds 16384 bytes.',
+  NOT_FOUND: 'Route not found.',
+  METHOD_NOT_ALLOWED: 'Method must be POST.',
+  INTERNAL_ERROR: 'Internal server error.',
+  MALFORMED_JSON: 'Request body must be valid JSON.',
+ };
+ if (Object.hasOwn(fixedMessages, code)) {
+  assert.deepEqual(result.body, {error: {code, message: fixedMessages[code], details: []}});
+ }
 }
 test('C1 base approval',async t=>{const {call}=await serve(t);const r=await call();assert.equal(r.status,200);assert.deepEqual(r.body,approval);});
 test('C2 credit outcomes',async t=>{const {call}=await serve(t);for(const [score,decision,reason] of [[599,'DECLINE',catalogue[0]],[650,'REFER',catalogue[1]]]){const r=await call({...base,creditScore:score});assert.equal(r.status,200);assert.equal(r.body.decision,decision);assert.equal(r.body.approvedAmount,null);assert.deepEqual(r.body.reasons,[reason]);}});
@@ -51,7 +62,7 @@ test('C10 direct parity repeatability and no mutation',async t=>{const {call}=aw
 test('C11 all invalid fields',async t=>{const {call}=await serve(t);for(const field of Object.keys(base))for(const value of [undefined,0,-1,null,'123',true]){const input={...base,[field]:value};const r=await call(input);error(r,400,'VALIDATION_ERROR');assert.deepEqual(r.body.error.details,[{field,message:'Must be a finite number greater than zero.'}]);assert.throws(()=>evaluateApplication(input),ValidationError);}});
 test('C12 integer score fractional money',async t=>{const {call}=await serve(t);const r=await call({...base,creditScore:720.5});error(r,400,'VALIDATION_ERROR');assert.deepEqual(r.body.error.details,[{field:'creditScore',message:'Must be an integer.'}]);assert.equal((await call({annualIncome:120000.5,monthlyDebt:2500.5,propertyValue:400000.5,requestedLoan:280000.5,creditScore:720})).status,200);});
 test('C13 object required',async t=>{const {call}=await serve(t);for(const input of [[],null,'hello',true,123]){const r=await call(input);error(r,400,'VALIDATION_ERROR');assert.match(r.body.error.details[0].message,/object/i);}});
-test('C14 malformed and recovery',async t=>{const {call}=await serve(t);for(const raw of ['', '{"secretApplicant":BROKEN']){const r=await call(base,{raw});error(r,400,'MALFORMED_JSON');assert.deepEqual(r.body,{error:{code:'MALFORMED_JSON',message:'Request body must be valid JSON.',details:[]}});assert.deepEqual((await call()).body,approval);}});
+test('C14 malformed and recovery',async t=>{const {call}=await serve(t);for(const raw of ['', '{"secretApplicant":BROKEN']){const r=await call(base,{raw});error(r,400,'MALFORMED_JSON');assert.deepEqual(r.body,{error:{code:'MALFORMED_JSON',message:'Request body must be valid JSON.',details:[]}});const recovery=await call();assert.equal(recovery.status,200);assert.deepEqual(recovery.body,approval);}});
 test('C15 nonrepresentable numbers',async t=>{const {call}=await serve(t);for(const patch of [{annualIncome:5e-324},{monthlyDebt:5e-324},{requestedLoan:1e308,propertyValue:5e-324},{requestedLoan:5e-324,propertyValue:1e308}]){error(await call({...base,...patch}),400,'VALIDATION_ERROR');assert.throws(()=>evaluateApplication({...base,...patch}),ValidationError);}error(await call(base,{raw:JSON.stringify(base).replace('120000','1e400')}),400,'VALIDATION_ERROR');for(const value of [NaN,Infinity,-Infinity])for(const field of Object.keys(base))assert.throws(()=>evaluateApplication({...base,[field]:value}),ValidationError);});
 test('C16 error envelope ordering',async t=>{const {call}=await serve(t);assert.deepEqual((await call({...base,monthlyDebt:0})).body,{error:{code:'VALIDATION_ERROR',message:'Request validation failed.',details:[{field:'monthlyDebt',message:'Must be a finite number greater than zero.'}]}});const r=await call({creditScore:'SECRET',requestedLoan:'SECRET',monthlyDebt:'SECRET',annualIncome:'SECRET',propertyValue:'SECRET'});assert.deepEqual(r.body.error.details.map(x=>x.field),['annualIncome','monthlyDebt','propertyValue','requestedLoan','creditScore']);assert.ok(!JSON.stringify(r.body).includes('SECRET'));});
 test('C17 media and byte limit',async t=>{const {call}=await serve(t);error(await call(base,{type:'text/plain'}),400,'UNSUPPORTED_CONTENT_TYPE');error(await call(base,{raw:' '.repeat(16385)}),400,'REQUEST_TOO_LARGE');error(await call(base,{raw:'é'.repeat(8193)}),400,'REQUEST_TOO_LARGE');const json=JSON.stringify(base);assert.equal((await call(base,{raw:json+' '.repeat(16384-Buffer.byteLength(json)),type:'application/json; charset=utf-8'})).status,200);});
