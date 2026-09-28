@@ -125,3 +125,7 @@ Proof: `node --test --test-name-pattern="^C24 " test/operation.test.js`
 - observability: C20; startup diagnostics C21.
 
 HTTP claims C1-C9 and C11-C20 cross real local HTTP. C10 covers direct evaluation and HTTP parity. C21/C23 use the real startup entrypoint. C22 uses a bounded child test run; C24 inspects README requirements. Light profile has no Test policy or Coverage join; numeric space is sampled at documented boundaries and representability probes, not exhaustively over all JavaScript numbers.
+
+## Build clarification
+
+The user removed the additional monthlyDebt=1e308 overflow test case after it was found to yield finite DTI with the base income. No replacement overflow case is required. C15 retains the source-mandated probes and finite-arithmetic validation. Logging capture runs in an isolated child process so test-runner output is not mistaken for application output.
